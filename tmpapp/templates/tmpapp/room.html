@@ -4,45 +4,82 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Room: {{ room_name }}</title>
+    <style>
+        #game-area {
+            width: 500px;
+            height: 500px;
+            border: 1px solid black;
+            position: relative;
+        }
+        .ball {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            position: absolute;
+        }
+    </style>
 </head>
 <body>
     <h1>Chat Room: {{ room_name }}</h1>
-    <div id="chat-log"></div>
-    <input id="chat-message-input" type="text" size="100">
-    <button id="chat-message-submit">Send</button>
+    <div id="game-area"></div>
 
     <script>
         const roomName = "{{ room_name }}";
         const chatSocket = new WebSocket(
             'ws://' + window.location.host + '/ws/chat/' + roomName + '/');
 
+        const gameArea = document.getElementById('game-area');
+        const balls = {};
+
+        const createBall = (user, color) => {
+            const ball = document.createElement('div');
+            ball.className = 'ball';
+            ball.style.backgroundColor = color;
+            gameArea.appendChild(ball);
+            balls[user] = {element: ball, x: 0, y: 0};
+        };
+
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
-            const chatLog = document.getElementById('chat-log');
-            const messageElement = document.createElement('div');
-            messageElement.textContent = `Server: ${data.message}`;
-            chatLog.appendChild(messageElement);
+            if (data.type === 'update_ball_position') {
+                const user = data.user;
+                const position = data.message;
+                if (!balls[user]) {
+                    createBall(user, 'red');
+                }
+                balls[user].x = position.x;
+                balls[user].y = position.y;
+                balls[user].element.style.left = position.x + 'px';
+                balls[user].element.style.top = position.y + 'px';
+            }
         };
 
         chatSocket.onclose = function(e) {
             console.error('Chat socket closed unexpectedly');
         };
 
-        document.getElementById('chat-message-input').focus();
-        document.getElementById('chat-message-input').onkeyup = function(e) {
-            if (e.keyCode === 13) {  // Enter key
-                document.getElementById('chat-message-submit').click();
-            }
-        };
+        const myUser = Math.random().toString(36).substring(7);
+        createBall(myUser, 'blue');
 
-        document.getElementById('chat-message-submit').onclick = function(e) {
-            const messageInputDom = document.getElementById('chat-message-input');
-            const message = messageInputDom.value;
+        document.addEventListener('keydown', function(e) {
+            const ball = balls[myUser];
+            if (e.key === 'ArrowUp') {
+                ball.y -= 10;
+            } else if (e.key === 'ArrowDown') {
+                ball.y += 10;
+            } else if (e.key === 'ArrowLeft') {
+                ball.x -= 10;
+            } else if (e.key === 'ArrowRight') {
+                ball.x += 10;
+            }
+            ball.element.style.left = ball.x + 'px';
+            ball.element.style.top = ball.y + 'px';
+
             chatSocket.send(JSON.stringify({
-                'message': message
+                'type': 'update_ball_position',
+                'message': {x: ball.x, y: ball.y}
             }));
-            messageInputDom.value = '';
-        };
+        });
     </script>
 </body>
 </html>
